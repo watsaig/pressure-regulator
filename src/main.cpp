@@ -97,7 +97,7 @@ unsigned long analogSetpointUpdatePeriod_ms = 100;
 unsigned long analogSetpointLastUpdateTime_ms;
 
 /// The time between updates of the process value over analog
-unsigned long analogPVUpdatePeriod_ms = 50;
+unsigned long analogPVUpdatePeriod_ms = 100;
 /// The last time the analog PV was updated
 unsigned long analogPVLastUpdateTime_ms;
 
@@ -112,6 +112,9 @@ double pidMinOutput = -1;
 double pidOutput;
 
 PID pid(&currentPressure, &pidOutput, &setPoint, 0, 0, 0, DIRECT);
+
+
+int analogSetpoint;
 
 // Debugging  aids
 unsigned long timer1_us = 0;
@@ -135,6 +138,9 @@ void setup()
 
     setValve1(0);
     setValve2(0);
+
+    analogSetpoint = 0;
+    setPoint = 0;
 
     // Setup PID controller
     // TODO: save these values to flash; load upon startup
@@ -263,6 +269,8 @@ void readPressure()
 
     // transfer function for Honeywell HSC sensors is from 10% to 90% of possible values.
     currentPressure = minPressure + (maxPressure - minPressure) * (val - 0.1*max)/(0.8*max);
+    // Bound output between minimum and maximum pressure
+    currentPressure = max(minPressure, min(currentPressure, maxPressure));
 
 #else
     // SPI sensor, TODO
@@ -289,11 +297,24 @@ void handleControllerOutput()
 
 void readAnalogSetpoint()
 {
+    // to avoid changing the setpoint 100 times a second, it is only updated if it has changed substantially
     int val = analogRead(analogSetpointPin);
-    setPoint = minPressure + double(val) * (maxPressure - minPressure) / 1023.;
+    val += analogRead(analogSetpointPin);
+    val += analogRead(analogSetpointPin);
+    val += analogRead(analogSetpointPin);
+    val += analogRead(analogSetpointPin);
+    val /= 5.;
+
+    if (abs(val - analogSetpoint) >= 10) {
+        analogSetpoint = val;
+        double s = minPressure + double(val) * (maxPressure - minPressure) / 1023.;
+        setPoint = s;
+    }
 }
 
 void updateAnalogPV()
 {
-    analogWrite(analogPVPin, round((currentPressure - minPressure)/(maxPressure - minPressure) * 255.));
+    int val = round((currentPressure - minPressure)/(maxPressure - minPressure) * 255.);
+    val = max(0, min(val, 255));
+    analogWrite(analogPVPin, val);
 }
