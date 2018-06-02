@@ -17,6 +17,9 @@
 
 #include "fastPWM.h"
 
+// comment the following line for production code
+#define debugging
+
 // Depending on the type of sensor (SPI or analog), comment/uncomment one of the two following lines
 //#define spiSensor
 #define analogSensor
@@ -43,7 +46,7 @@ enum ControlInterface {
 };
 
 /// The currently-used control interface
-ControlInterface interface = analogControl;
+ControlInterface controlInterface = analogControl;
 
 // Valve minimum and maximum value (0-255). The minimum value is the value at
 // which the valve starts to open.
@@ -114,7 +117,7 @@ double pidOutput;
 PID pid(&currentPressure, &pidOutput, &setPoint, 0, 0, 0, DIRECT);
 
 
-int analogSetpoint;
+int lastAnalogSetpoint;
 
 // Debugging  aids
 unsigned long timer1_us = 0;
@@ -123,6 +126,11 @@ unsigned long n = 0;
 void setup()
 {
     Serial.begin(115200);
+
+#ifdef debugging
+    // Wait for serial to attach, but only for debugging purposes
+    while(!Serial);
+#endif
 
     // Timers
     sensorLastReadTime_us = micros();
@@ -139,7 +147,7 @@ void setup()
     setValve1(0);
     setValve2(0);
 
-    analogSetpoint = 0;
+    lastAnalogSetpoint = 0;
     setPoint = 0;
 
     // Setup PID controller
@@ -173,7 +181,7 @@ void loop()
     if (Serial.available()) {
         processSerialData();
         // if parameters have been updated over USB, we switch to using that as the control interface
-        interface = usbControl;
+        controlInterface = usbControl;
     }
 
     // This loop takes ~250-300ms
@@ -188,7 +196,7 @@ void loop()
         analogPVLastUpdateTime_ms = millis();
     }
 
-    if (interface == analogControl && millis() - analogSetpointLastUpdateTime_ms > analogSetpointUpdatePeriod_ms) {
+    if (controlInterface == analogControl && millis() - analogSetpointLastUpdateTime_ms > analogSetpointUpdatePeriod_ms) {
         readAnalogSetpoint();
         analogSetpointLastUpdateTime_ms = millis();
     }
@@ -305,8 +313,8 @@ void readAnalogSetpoint()
     val += analogRead(analogSetpointPin);
     val /= 5.;
 
-    if (abs(val - analogSetpoint) >= 10) {
-        analogSetpoint = val;
+    if (abs(val - lastAnalogSetpoint) >= 10) {
+        lastAnalogSetpoint = val;
         double s = minPressure + double(val) * (maxPressure - minPressure) / 1023.;
         setPoint = s;
     }
