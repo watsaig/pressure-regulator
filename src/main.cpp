@@ -14,6 +14,7 @@
 
 #include <Arduino.h>
 #include <PID_v1.h> // PID library by Brett Beauregard
+#include <Wire.h>
 
 #include "fastPWM.h"
 
@@ -32,6 +33,8 @@
 // Minimum and maximum pressure, in PSI (or whatever other unit)
 #define minPressure 0.0
 #define maxPressure 30.0
+
+int i2cAddress = 43;
 
 #define sensorAnalogPin A5 // PF0
 #define analogSetpointPin A4 // PF1
@@ -75,6 +78,12 @@ void handleControllerOutput();
 void readAnalogSetpoint();
 /// Output the current process value on the analog PV pin
 void updateAnalogPV();
+/// Initialize the i2c address; it can be modified by closing jumpers J8 and J9
+void initI2cAddress();
+/// Called when data is received via i2c
+void i2cReceiveEvent(int nBytes);
+/// Called when data is requested via i2c
+void i2cRequestEvent();
 
 // Timers
 //
@@ -143,6 +152,12 @@ void setup()
     pinMode(sensorAnalogPin, INPUT);
     pinMode(analogSetpointPin, INPUT);
     pwm613configure(PWM23k);
+
+    // i2c communication
+    initI2cAddress();
+    Wire.begin(i2cAddress);
+    Wire.onReceive(i2cReceiveEvent);
+    Wire.onRequest(i2cRequestEvent);
 
     setValve1(0);
     setValve2(0);
@@ -325,4 +340,39 @@ void updateAnalogPV()
     int val = round((currentPressure - minPressure)/(maxPressure - minPressure) * 255.);
     val = max(0, min(val, 255));
     analogWrite(analogPVPin, val);
+}
+
+void initI2cAddress()
+{
+    // J8 and J9 are wired to PF4 and PF5 (A3 and A2), resp.
+    pinMode(A3, INPUT_PULLUP);
+    pinMode(A2, INPUT_PULLUP);
+
+    if (digitalRead(A3) == LOW)
+        i2cAddress += 1;
+    if (digitalRead(A2) == LOW)
+        i2cAddress += 2;
+
+    Serial.print("i2c address initialized to ");
+    Serial.println(i2cAddress);
+}
+
+void i2cRequestEvent()
+{
+    // For now, we only send the current pressure, between 0 and 255
+    int val = round((currentPressure - minPressure)/(maxPressure - minPressure) * 255.);
+    uint8_t pv = max(0, min(val, 255));
+    Wire.write(pv);
+}
+
+void i2cReceiveEvent(int nBytes)
+{
+    // In case more than one byte is received, discard all but the last one
+    while (Wire.available() > 1)
+        Wire.read();
+
+    uint8_t val = Wire.read();
+    setPoint = minPressure + double(val) * (maxPressure - minPressure) / 255.;
+
+    controlInterface = i2cControl;
 }
