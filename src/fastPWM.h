@@ -81,3 +81,55 @@ void pwmSet13(int value)
     DDRC|=1<<7;    // Set Output Mode C7
     TCCR4A=0x82;  // Activate channel A
 }
+
+
+/**********************************************************
+   Fast PWM on pins 9,10,11 (TIMER 1)
+
+   Do not use analogWrite to pins 9, 10 or 11 if using
+   this functions as they use the same timer.
+
+   Those functions will probably conflict with the
+   servo library.
+
+   Uses 5 PWM frequencies between 61Hz and 62.5kHz
+
+**********************************************************/
+
+// Frequency modes for TIMER1
+#define PWM62k   1   //62500 Hz
+#define PWM8k    2   // 7812 Hz
+#define PWM1k    3   //  976 Hz
+#define PWM244   4   //  244 Hz
+#define PWM61    5   //   61 Hz
+
+// Direct PWM change variables
+#define PWM9   OCR1A
+
+// Configure the PWM clock
+// The argument is one of the 5 previously defined modes
+void pwm91011configure(int mode)
+{
+    // TCCR1A configuration
+    //  00 : Channel A disabled D9
+    //  00 : Channel B disabled D10
+    //  00 : Channel C disabled D11
+    //  01 : Fast PWM 8 bit
+    TCCR1A=1;
+
+    // TCCR1B configuration
+    // Clock mode and Fast PWM 8 bit
+    TCCR1B=mode|0x08;
+
+    // TCCR1C configuration
+    TCCR1C=0;
+}
+
+// Set PWM to D9
+// Argument is PWM between 0 and 255
+void pwmSet9(int value)
+{
+    OCR1A=value;   // Set PWM value
+    DDRB|=1<<5;    // Set Output Mode B5
+    TCCR1A|=0x80;  // Activate channel
+}

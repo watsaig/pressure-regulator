@@ -152,6 +152,7 @@ void setup()
     pinMode(sensorAnalogPin, INPUT);
     pinMode(analogSetpointPin, INPUT);
     pwm613configure(PWM23k);
+    pwm91011configure(PWM8k);
 
     // i2c communication
     initI2cAddress();
@@ -339,7 +340,7 @@ void updateAnalogPV()
 {
     int val = round((currentPressure - minPressure)/(maxPressure - minPressure) * 255.);
     val = max(0, min(val, 255));
-    analogWrite(analogPVPin, val);
+    pwmSet9(val);
 }
 
 void initI2cAddress()
