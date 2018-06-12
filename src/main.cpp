@@ -19,7 +19,7 @@
 #include "fastPWM.h"
 
 // comment the following line for production code
-#define debugging
+//#define debugging
 
 // Depending on the type of sensor (SPI or analog), comment/uncomment one of the two following lines
 //#define spiSensor
@@ -217,7 +217,6 @@ void loop()
         analogSetpointLastUpdateTime_ms = millis();
     }
 
-    // TODO: Read I2C commands
 }
 
 void setValve1(uint8_t val)
@@ -360,10 +359,17 @@ void initI2cAddress()
 
 void i2cRequestEvent()
 {
-    // For now, we only send the current pressure, between 0 and 255
+    // send the current pressure, between 0 and 255, and whether the supply pressure is too low or not.
     int val = round((currentPressure - minPressure)/(maxPressure - minPressure) * 255.);
     uint8_t pv = max(0, min(val, 255));
-    Wire.write(pv);
+
+    // Simple indication of whether the input pressure is too low. If PID output is positive, we assume
+    // that the pressure is too low. Could be refined by taking into account rate of change of PV, for example.
+    uint8_t supplyTooLow = 0;
+    if (pidOutput > 0.2) // bit of an arbitrary threshold
+        supplyTooLow = 1;
+    uint8_t toSend[2] = {pv, supplyTooLow};
+    Wire.write(toSend, sizeof toSend);
 }
 
 void i2cReceiveEvent(int nBytes)
