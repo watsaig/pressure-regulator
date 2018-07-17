@@ -30,9 +30,15 @@
     SPISettings spi_settings = SPISettings(800000, MSBFIRST, SPI_MODE0);
 #endif
 
-// Minimum and maximum pressure, in PSI (or whatever other unit)
-#define minPressure 0.0
+// Minimum and maximum pressure of the sensor, in PSI (or whatever other unit)
+#define minPressure 0
 #define maxPressure 30.0
+
+// If the pressure goes above the maximum of the sensor, there is no way to control it.
+// Keeping the max and min setpoints somewhat within the sensor's max and min
+// helps prevent this issue.
+#define minPressureSetpoint 0
+#define maxPressureSetpoint 29.5
 
 int i2cAddress = 43;
 
@@ -259,7 +265,7 @@ void processSerialData()
 
 void updateController(double kp_, double ki_, double kd_, double setpoint_)
 {
-    if (setpoint_ != setPoint && setpoint_ >= minPressure && setpoint_ <= maxPressure) {
+    if (setpoint_ != setPoint && setpoint_ >= minPressureSetpoint && setpoint_ <= maxPressureSetpoint) {
         setPoint = setpoint_;
 
         // If the setpoint is negative (and we are pulling a vacuum), then opening the
@@ -293,7 +299,7 @@ void readPressure()
     // transfer function for Honeywell HSC sensors is from 10% to 90% of possible values.
     currentPressure = minPressure + (maxPressure - minPressure) * (val - 0.1*max)/(0.8*max);
     // Bound output between minimum and maximum pressure
-    currentPressure = max(minPressure, min(currentPressure, maxPressure));
+    //currentPressure = max(minPressure, min(currentPressure, maxPressure));
 
 #else
     // SPI sensor, TODO
@@ -330,7 +336,7 @@ void readAnalogSetpoint()
 
     if (abs(val - lastAnalogSetpoint) >= 10) {
         lastAnalogSetpoint = val;
-        double s = minPressure + double(val) * (maxPressure - minPressure) / 1023.;
+        double s = minPressureSetpoint + double(val) * (maxPressureSetpoint - minPressureSetpoint) / 1023.;
         setPoint = s;
     }
 }
@@ -379,7 +385,7 @@ void i2cReceiveEvent(int nBytes)
         Wire.read();
 
     uint8_t val = Wire.read();
-    setPoint = minPressure + double(val) * (maxPressure - minPressure) / 255.;
+    setPoint = minPressureSetpoint + double(val) * (maxPressureSetpoint - minPressureSetpoint) / 255.;
 
     controlInterface = i2cControl;
 }
