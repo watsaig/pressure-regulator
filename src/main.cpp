@@ -28,6 +28,8 @@
 #ifdef spiSensor
     #include <SPI.h>
     SPISettings spi_settings = SPISettings(800000, MSBFIRST, SPI_MODE0);
+    #define slave_select_pin 7 // PE6
+    #define max_counts 16384
 #endif
 
 // Minimum and maximum pressure of the sensor, in PSI (or whatever other unit)
@@ -301,8 +303,31 @@ void readPressure()
     // Bound output between minimum and maximum pressure
     //currentPressure = max(minPressure, min(currentPressure, maxPressure));
 
-#else
-    // SPI sensor, TODO
+#else // SPI sensor
+    // The code below is mostly taken from https://github.com/AlexSatrapa/SSC
+    // (Author: Alex Satrapa, grail@goldweb.com.au)
+    float p_raw;
+
+    uint8_t x, y, v, w, s;
+    s = 0xAA; // Just a convenient value for monitoring MOSI
+
+    SPI.beginTransaction(spi_settings);
+    digitalWrite(slave_select_pin, LOW);
+    x = SPI.transfer(s);
+    y = SPI.transfer(s);
+    v = SPI.transfer(s);
+    w = SPI.transfer(s);
+    digitalWrite(slave_select_pin, HIGH);
+    SPI.endTransaction();
+
+    s = x >> 6;
+
+    if (s == 0) {
+        p_raw = (((int) (x & 0x3f)) << 8) | y;
+        float p = ((p_raw - 0.1 * float(max_counts)) * (p_max - p_min) / (0.8 * float(max_counts))) + p_min;
+        currentPressure = p;
+    }
+    // if s != 0, an error occurred. Currently not handled here.
 
 #endif
 
