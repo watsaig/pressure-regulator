@@ -77,9 +77,9 @@ void processSerialData();
 /// Read the current pressure and update the currentPressure variable
 void readPressure();
 /// Update the PID constants and/or setpoint
-void updateController(double kp_, double ki_, double kd_, double setpoint_);
+void updateController(float kp_, float ki_, float kd_, float setpoint_);
 /// Update the setpoint only
-void updateController(double setpoint_);
+void updateController(float setpoint_);
 /// Open and close valves based on PID controller output
 void handleControllerOutput();
 /// Read analog SP pin and update the pressure setpoint
@@ -126,9 +126,9 @@ unsigned long analogPVLastUpdateTime_ms;
 //
 
 double setPoint, currentPressure;
-double kp, ki, kd;
-double pidMaxOutput = 1;
-double pidMinOutput = -1;
+float kp, ki, kd;
+float pidMaxOutput = 1;
+float pidMinOutput = -1;
 double pidOutput;
 
 PID pid(&currentPressure, &pidOutput, &setPoint, 0, 0, 0, DIRECT);
@@ -265,7 +265,7 @@ void processSerialData()
     updateController(kp_, ki_, kd_, sp_);
 }
 
-void updateController(double kp_, double ki_, double kd_, double setpoint_)
+void updateController(float kp_, float ki_, float kd_, float setpoint_)
 {
     if (setpoint_ != setPoint && setpoint_ >= minPressureSetpoint && setpoint_ <= maxPressureSetpoint) {
         setPoint = setpoint_;
@@ -287,7 +287,7 @@ void updateController(double kp_, double ki_, double kd_, double setpoint_)
     }
 }
 
-void updateController(double setpoint_)
+void updateController(float setpoint_)
 {
     updateController(kp, ki, kd, setpoint_);
 }
@@ -295,8 +295,8 @@ void updateController(double setpoint_)
 void readPressure()
 {
 #ifdef analogSensor
-    double val = analogRead(sensorAnalogPin);
-    double max = 1023.; // max possible value of analogRead
+    float val = analogRead(sensorAnalogPin);
+    float max = 1023.; // max possible value of analogRead
 
     // transfer function for Honeywell HSC sensors is from 10% to 90% of possible values.
     currentPressure = minPressure + (maxPressure - minPressure) * (val - 0.1*max)/(0.8*max);
@@ -361,7 +361,7 @@ void readAnalogSetpoint()
 
     if (abs(val - lastAnalogSetpoint) >= 10) {
         lastAnalogSetpoint = val;
-        double s = minPressureSetpoint + double(val) * (maxPressureSetpoint - minPressureSetpoint) / 1023.;
+        float s = minPressureSetpoint + float(val) * (maxPressureSetpoint - minPressureSetpoint) / 1023.;
         setPoint = s;
     }
 }
@@ -405,12 +405,31 @@ void i2cRequestEvent()
 
 void i2cReceiveEvent(int nBytes)
 {
-    // In case more than one byte is received, discard all but the last one
-    while (Wire.available() > 1)
-        Wire.read();
+    // The master can either send just a setpoint, or a setpoint
+    // and k_p, k_i, and k_d constants. The setpoint is one byte,
+    // while the PID constants are floats, i.e. 4 bytes each.
 
-    uint8_t val = Wire.read();
-    setPoint = minPressureSetpoint + double(val) * (maxPressureSetpoint - minPressureSetpoint) / 255.;
-
+    // once we've received an instruction over i2c, we stop
+    // listening to analog setpoint changes.
     controlInterface = i2cControl;
+
+    if (nBytes == 1) {
+        uint8_t sp_ = Wire.read();
+        float sp_psi = minPressureSetpoint + float(sp_) * (maxPressureSetpoint - minPressureSetpoint) / 255.;
+        updateController(sp_psi);
+    }
+
+    else if (nBytes == 13) {
+        uint8_t sp_ = Wire.read();
+        float sp_psi = minPressureSetpoint + float(sp_) * (maxPressureSetpoint - minPressureSetpoint) / 255.;
+
+        float kp_, ki_, kd_;
+        int a = Wire.readBytes((uint8_t*)&kp_, 4);
+        int b = Wire.readBytes((uint8_t*)&ki_, 4);
+        int c = Wire.readBytes((uint8_t*)&kd_, 4);
+        if (a == 4 && b == 4 && c == 4)
+            updateController(kp_, ki_, kd_, sp_psi);
+        else
+            updateController(sp_psi);
+    }
 }
