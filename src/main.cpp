@@ -59,7 +59,7 @@ ControlInterface controlInterface = analogControl;
 
 // Valve minimum and maximum value (0-255). The minimum value is the value at
 // which the valve starts to open.
-uint8_t valveMinValue = 50;
+uint8_t valveMinValue = 40;
 uint8_t valveMaxValue = 255;
 
 // Function headers
@@ -95,7 +95,7 @@ void i2cRequestEvent();
 //
 
 /// The time between reads of the sensor, in microseconds
-unsigned long sensorReadPeriod_us = 2500;
+unsigned long sensorReadPeriod_us = 200;
 /// The last time the sensor was read
 unsigned long sensorLastReadTime_us;
 
@@ -105,7 +105,7 @@ unsigned long serialTransmissionPeriod_ms = 50;
 unsigned long serialLastSendTime_ms;
 
 /// The time between each computation of the control loop, in milliseconds
-unsigned long controlLoopPeriod_ms = 5;
+unsigned long controlLoopPeriod_ms = 1;
 /// The last time the PID loop was run
 unsigned long lastControlTime_ms;
 
@@ -115,7 +115,7 @@ unsigned long analogSetpointUpdatePeriod_ms = 100;
 unsigned long analogSetpointLastUpdateTime_ms;
 
 /// The time between updates of the process value over analog
-unsigned long analogPVUpdatePeriod_ms = 100;
+unsigned long analogPVUpdatePeriod_ms = 5;
 /// The last time the analog PV was updated
 unsigned long analogPVLastUpdateTime_ms;
 
@@ -157,7 +157,7 @@ void setup()
     // Setup pins
     pinMode(sensorAnalogPin, INPUT);
     pinMode(analogSetpointPin, INPUT);
-    pwm613configure(PWM23k);
+    pwm613configure(PWM47k);
     pwm91011configure(PWM8k);
 
     // i2c communication
@@ -174,8 +174,8 @@ void setup()
 
     // Setup PID controller
     // TODO: save these values to flash; load upon startup
-    kp = 0.12;
-    ki = 0.6;
+    kp = 0.4;
+    ki = 0.3;
     kd = 0;
 
     pid.SetOutputLimits(pidMinOutput, pidMaxOutput);
@@ -372,7 +372,7 @@ void i2cRequestEvent()
     // Simple indication of whether the input pressure is too low. If PID output is positive, we assume
     // that the pressure is too low. Could be refined by taking into account rate of change of PV, for example.
     uint8_t supplyTooLow = 0;
-    if (pidOutput > 0.2) // bit of an arbitrary threshold
+    if (pidOutput > 0.12) // bit of an arbitrary threshold
         supplyTooLow = 1;
     uint8_t toSend[2] = {pv, supplyTooLow};
     Wire.write(toSend, sizeof toSend);
