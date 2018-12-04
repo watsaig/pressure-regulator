@@ -24,6 +24,8 @@
 // Depending on the type of sensor (SPI or analog), comment/uncomment one of the two following lines
 //#define spiSensor
 #define analogSensor
+#define spiSensor
+//#define analogSensor
 
 #ifdef spiSensor
     #include <SPI.h>
@@ -161,6 +163,12 @@ void setup()
     pinMode(analogSetpointPin, INPUT);
     pwm613configure(PWM47k);
     pwm91011configure(PWM8k);
+
+#ifdef spiSensor
+    pinMode(slave_select_pin, OUTPUT);
+    digitalWrite(slave_select_pin, HIGH);
+    SPI.begin();
+#endif
 
     // i2c communication
     initI2cAddress();
@@ -324,10 +332,13 @@ void readPressure()
 
     if (s == 0) {
         p_raw = (((int) (x & 0x3f)) << 8) | y;
-        float p = ((p_raw - 0.1 * float(max_counts)) * (p_max - p_min) / (0.8 * float(max_counts))) + p_min;
+        float p = ((p_raw - 0.1 * float(max_counts)) * (maxPressure - minPressure) / (0.8 * float(max_counts))) + minPressure;
         currentPressure = p;
     }
-    // if s != 0, an error occurred. Currently not handled here.
+    else {
+        Serial.print("SPI error: ");
+        Serial.println(s);
+    }
 
 #endif
 
