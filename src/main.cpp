@@ -25,13 +25,6 @@
 #define spiSensor
 //#define analogSensor
 
-#ifdef spiSensor
-    #include <SPI.h>
-    SPISettings spi_settings = SPISettings(800000, MSBFIRST, SPI_MODE0);
-    #define slave_select_pin 7 // PE6
-    #define max_counts 16384
-#endif
-
 // Minimum and maximum pressure of the sensor, in PSI (or whatever other unit)
 #define minPressure 0
 #define maxPressure 30.0
@@ -45,56 +38,14 @@
 #define minPressureSetpoint 0.98*minPressure
 #define maxPressureSetpoint 0.98*maxPressure
 
+// This regulator's base i2c address. Can be modified here or in hardware,
+// by soldering J8 and/or J9 (see initI2cAddress())
 int i2cAddress = 43;
-
-#define sensorAnalogPin A5 // PF0
-#define analogSetpointPin A4 // PF1
-#define analogPVPin 9 // PB5
-
-// The regulator can be controlled either through analog voltages (by default),
-// i2c, or USB.
-enum ControlInterface {
-    analogControl,
-    i2cControl,
-    usbControl
-};
-
-/// The currently-used control interface
-ControlInterface controlInterface = analogControl;
 
 // Valve minimum and maximum value (0-255). The minimum value is the value at
 // which the valve starts to open.
 uint8_t valveMinValue = 40;
 uint8_t valveMaxValue = 255;
-
-// Function headers
-//
-
-/// Set valve openings. 0: fully closed; 255: fully open
-void setValve1(uint8_t val);
-void setValve2(uint8_t val);
-/// Send all the useful values (setpoint, pv, etc.. over USB)
-void sendSerialData();
-/// Read incoming serial data and update the controller
-void processSerialData();
-/// Read the current pressure and update the currentPressure variable
-void readPressure();
-/// Update the PID constants and/or setpoint
-void updateController(float kp_, float ki_, float kd_, float setpoint_);
-/// Update the setpoint only
-void updateController(float setpoint_);
-/// Open and close valves based on PID controller output
-void handleControllerOutput();
-/// Read analog SP pin and update the pressure setpoint
-void readAnalogSetpoint();
-/// Output the current process value on the analog PV pin
-void updateAnalogPV();
-/// Initialize the i2c address; it can be modified by closing jumpers J8 and J9
-void initI2cAddress();
-/// Called when data is received via i2c
-void i2cReceiveEvent(int nBytes);
-/// Called when data is requested via i2c
-void i2cRequestEvent();
 
 // Timers
 //
@@ -136,12 +87,62 @@ double pidOutput;
 
 PID pid(&currentPressure, &pidOutput, &setPoint, 0, 0, 0, DIRECT);
 
-
 int lastAnalogSetpoint;
 
-// Debugging  aids
-unsigned long timer1_us = 0;
-unsigned long n = 0;
+// Pin assignments and SPI settings -- Do not modify
+//
+
+#define sensorAnalogPin A5 // PF0
+#define analogSetpointPin A4 // PF1
+#define analogPVPin 9 // PB5
+
+#ifdef spiSensor
+    #include <SPI.h>
+    SPISettings spi_settings = SPISettings(800000, MSBFIRST, SPI_MODE0);
+    #define slave_select_pin 7 // PE6
+    #define max_counts 16384
+#endif
+
+// The regulator can be controlled either through analog voltages (by default),
+// i2c, or USB.
+enum ControlInterface {
+    analogControl,
+    i2cControl,
+    usbControl
+};
+/// The currently-used control interface
+ControlInterface controlInterface = analogControl;
+
+// Function headers
+//
+
+/// Set valve openings. 0: fully closed; 255: fully open
+void setValve1(uint8_t val);
+void setValve2(uint8_t val);
+/// Send all the useful values (setpoint, pv, etc.. over USB)
+void sendSerialData();
+/// Read incoming serial data and update the controller
+void processSerialData();
+/// Read the current pressure and update the currentPressure variable
+void readPressure();
+/// Update the PID constants and/or setpoint
+void updateController(float kp_, float ki_, float kd_, float setpoint_);
+/// Update the setpoint only
+void updateController(float setpoint_);
+/// Open and close valves based on PID controller output
+void handleControllerOutput();
+/// Read analog SP pin and update the pressure setpoint
+void readAnalogSetpoint();
+/// Output the current process value on the analog PV pin
+void updateAnalogPV();
+/// Initialize the i2c address; it can be modified by closing jumpers J8 and J9
+void initI2cAddress();
+/// Called when data is received via i2c
+void i2cReceiveEvent(int nBytes);
+/// Called when data is requested via i2c
+void i2cRequestEvent();
+
+
 
 void setup()
 {
@@ -199,11 +200,8 @@ void setup()
 void loop()
 {
     if (micros() - sensorLastReadTime_us > sensorReadPeriod_us) {
-        //timer1_us = micros();
         readPressure();
         sensorLastReadTime_us = micros();
-        //Serial.print("ADC read time: ");
-        //Serial.println(sensorLastReadTime_us - timer1_us);
     }
 
     if (millis() - serialLastSendTime_ms > serialTransmissionPeriod_ms) {
@@ -363,7 +361,6 @@ void handleControllerOutput()
 
 void readAnalogSetpoint()
 {
-    // to avoid changing the setpoint 100 times a second, it is only updated if it has changed substantially
     int val = analogRead(analogSetpointPin);
     val += analogRead(analogSetpointPin);
     val += analogRead(analogSetpointPin);
@@ -371,6 +368,7 @@ void readAnalogSetpoint()
     val += analogRead(analogSetpointPin);
     val /= 5.;
 
+    // to avoid changing the setpoint 100 times a second, it is only updated if it has changed substantially
     if (abs(val - lastAnalogSetpoint) >= 10) {
         lastAnalogSetpoint = val;
         float s = minPressureSetpoint + float(val) * (maxPressureSetpoint - minPressureSetpoint) / 1023.;
@@ -409,7 +407,7 @@ void i2cRequestEvent()
     // Simple indication of whether the input pressure is too low. If PID output is positive, we assume
     // that the pressure is too low. Could be refined by taking into account rate of change of PV, for example.
     uint8_t supplyTooLow = 0;
-    if (pidOutput > 0.12) // bit of an arbitrary threshold
+    if (pidOutput > 0.2) // bit of an arbitrary threshold
         supplyTooLow = 1;
     uint8_t toSend[2] = {pv, supplyTooLow};
     Wire.write(toSend, sizeof toSend);
