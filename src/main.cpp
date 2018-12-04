@@ -41,8 +41,11 @@
 // If the pressure goes above the maximum of the sensor, there is no way to control it.
 // Keeping the max and min setpoints somewhat within the sensor's max and min
 // helps prevent this issue.
-#define minPressureSetpoint 0
-#define maxPressureSetpoint 29.5
+// The setpoint and current presure transmitted via analog or i2c interfaces
+// are both bounded by these values. E.g. if using a 30psi sensor, a value
+// of 3.3v on analog or 255 on i2c corresponds to 29.5 psi, not 30.
+#define minPressureSetpoint 0.98*minPressure
+#define maxPressureSetpoint 0.98*maxPressure
 
 int i2cAddress = 43;
 
@@ -379,7 +382,7 @@ void readAnalogSetpoint()
 
 void updateAnalogPV()
 {
-    int val = round((currentPressure - minPressure)/(maxPressure - minPressure) * 255.);
+    int val = round((currentPressure - minPressureSetpoint)/(maxPressureSetpoint - minPressureSetpoint) * 255.);
     val = max(0, min(val, 255));
     pwmSet9(val);
 }
@@ -402,7 +405,7 @@ void initI2cAddress()
 void i2cRequestEvent()
 {
     // send the current pressure, between 0 and 255, and whether the supply pressure is too low or not.
-    int val = round((currentPressure - minPressure)/(maxPressure - minPressure) * 255.);
+    int val = round((currentPressure - minPressureSetpoint)/(maxPressureSetpoint - minPressureSetpoint) * 255.);
     uint8_t pv = max(0, min(val, 255));
 
     // Simple indication of whether the input pressure is too low. If PID output is positive, we assume
