@@ -22,8 +22,6 @@
 //#define debugging
 
 // Depending on the type of sensor (SPI or analog), comment/uncomment one of the two following lines
-//#define spiSensor
-#define analogSensor
 #define spiSensor
 //#define analogSensor
 
