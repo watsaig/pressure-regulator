@@ -15,6 +15,7 @@
 #include <Arduino.h>
 #include <PID_v1.h> // PID library by Brett Beauregard
 #include <Wire.h>
+#include <EEPROM.h>
 
 #include "fastPWM.h"
 
@@ -80,7 +81,9 @@ unsigned long analogPVLastUpdateTime_ms;
 //
 
 double setPoint, currentPressure;
-float kp, ki, kd;
+float kp = 0;
+float ki = 0;
+float kd = 0;
 float pidMaxOutput = 1;
 float pidMinOutput = -1;
 double pidOutput;
@@ -113,6 +116,11 @@ enum ControlInterface {
 /// The currently-used control interface
 ControlInterface controlInterface = analogControl;
 
+// EEPROM (flash memory) related variables
+#define KP_ADDRESS 0
+#define KI_ADDRESS sizeof(float)
+#define KD_ADDRESS 2*sizeof(float)
+
 // Function headers
 //
 
@@ -141,7 +149,8 @@ void initI2cAddress();
 void i2cReceiveEvent(int nBytes);
 /// Called when data is requested via i2c
 void i2cRequestEvent();
-
+/// Save Kp, Ki, Kd to EEPROM
+void savePIDConstantsToFlash();
 
 
 void setup()
@@ -184,11 +193,18 @@ void setup()
     lastAnalogSetpoint = 0;
     setPoint = 0;
 
-    // Setup PID controller
-    // TODO: save these values to flash; load upon startup
-    kp = 0.4;
-    ki = 0.3;
-    kd = 0;
+    // Load PID constants from flash
+    EEPROM.get(KP_ADDRESS, kp);
+    EEPROM.get(KI_ADDRESS, ki);
+    EEPROM.get(KD_ADDRESS, kd);
+
+    // set to default values if they have never been saved
+    if (isnan(kp) || isnan(ki) || isnan(kd)) {
+        kp = 0.4;
+        ki = 0.3;
+        kd = 0;
+        savePIDConstantsToFlash();
+    }
 
     pid.SetOutputLimits(pidMinOutput, pidMaxOutput);
     pid.SetSampleTime(controlLoopPeriod_ms);
@@ -291,6 +307,7 @@ void updateController(float kp_, float ki_, float kd_, float setpoint_)
         ki = ki_;
         kd = kd_;
         pid.SetTunings(kp, ki, kd);
+        savePIDConstantsToFlash();
     }
 }
 
@@ -442,4 +459,11 @@ void i2cReceiveEvent(int nBytes)
         else
             updateController(sp_psi);
     }
+}
+
+void savePIDConstantsToFlash()
+{
+    EEPROM.put(KP_ADDRESS, kp);
+    EEPROM.put(KI_ADDRESS, ki);
+    EEPROM.put(KD_ADDRESS, kd);
 }
