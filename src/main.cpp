@@ -81,8 +81,8 @@ unsigned long analogPVLastUpdateTime_ms;
 //
 
 double setPoint, currentPressure;
-float kp = 0;
-float ki = 0;
+float kp = 0.4;
+float ki = 0.3;
 float kd = 0;
 float pidMaxOutput = 1;
 float pidMinOutput = -1;
@@ -199,6 +199,7 @@ void setup()
     EEPROM.get(KD_ADDRESS, kd);
 
     // set to default values if they have never been saved
+    // Note: this did not necessarily work so the default values are also set above
     if (isnan(kp) || isnan(ki) || isnan(kd)) {
         kp = 0.4;
         ki = 0.3;
