@@ -374,6 +374,11 @@ void handleControllerOutput()
         int val = valveMinValue + round(-pidOutput * (valveMaxValue - valveMinValue));
         setValve2(val);
     }
+
+    // Save a tiny bit of power at idle
+    if (setPoint == 0) {
+        setValve1(0);
+    }
 }
 
 void readAnalogSetpoint()
