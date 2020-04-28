@@ -29,6 +29,14 @@
 // Minimum and maximum pressure of the sensor, in PSI (or whatever other unit)
 #define minPressure 0
 #define maxPressure 30.0
+// Calibration: if the actual pressure output doesn't correspond to the given sensor value,
+// set this value to be the observed difference.
+// e.g. if the regulator outputs 10 PSI when it is actually at 12 PSI, then set +2.0.
+
+// Note: this has only been observed with 5V analog sensors, and is probably due to errors
+// introduced by the conversion to 3.3V. The sensors themselves are calibrated and should be
+// accurate unless there is manufacturing defect.
+double calibration = 1.47;
 
 // If the pressure goes above the maximum of the sensor, there is no way to control it.
 // Keeping the max and min setpoints somewhat within the sensor's max and min
@@ -327,6 +335,7 @@ void readPressure()
     currentPressure = minPressure + (maxPressure - minPressure) * (val - 0.1*max)/(0.8*max);
     // Bound output between minimum and maximum pressure
     //currentPressure = max(minPressure, min(currentPressure, maxPressure));
+    currentPressure += calibration;
 
 #else // SPI sensor
     // The code below is mostly taken from https://github.com/AlexSatrapa/SSC
